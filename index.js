@@ -26,7 +26,7 @@ const Nodes = [
         name: 'MainNode',
         url:  `${urlHost}:2333`,
         auth: lpassword,
-        secure: true
+        secure: false
     }
 ];
 
