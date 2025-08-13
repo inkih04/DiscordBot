@@ -21,18 +21,15 @@ client.commands = new Collection();
 
 client.queues = new Map();
 
-const Nodes = [
-    {
-        name: 'MainNode',
-        url:  `${urlHost}:2333`,
-        auth: lpassword,
-        secure: false
-    }
-];
+const nodes = [{
+    name: 'MainNode',
+    url: 'localhost:2333', // Lavalink seguirá en puerto 2333
+    auth: process.env.LAVALINK_SERVER_PASSWORD || process.env.PASSWORD || 'changeme'
+}];
 
 client.shoukaku = new Shoukaku(
     new Connectors.DiscordJS(client),
-    Nodes,
+    nodes,
     {
         reconnectTries: 3,
         reconnectInterval: 5000,
@@ -92,12 +89,9 @@ client.login(token);
 const express = require('express');
 const app = express();
 
-const PORT = process.env.PORT || 3000;
 
-app.get('/', (req, res) => {
-    res.send('Bot activo 🚀');
-});
+const PORT = process.env.PORT || 10000;
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor de ping escuchando en el puerto ${PORT}`);
 });
