@@ -24,9 +24,9 @@ client.queues = new Map();
 const Nodes = [
     {
         name: 'MainNode',
-        url: `${urlHost}:2333`,
+        url:  `${urlHost}:2333`,
         auth: lpassword,
-        secure: false
+        secure: true
     }
 ];
 
@@ -86,22 +86,18 @@ for (const file of shoukakuEventFiles) {
     client.shoukaku.on(event.name, (...args) => event.execute(...args, client));
 }
 
-const fetch = require('node-fetch'); 
-
-const LAVALINK_PING_URL = 'https://tu-lavalink-en-render.com/version';
-
-setInterval(async () => {
-    try {
-        const res = await fetch(LAVALINK_PING_URL);
-        if (res.ok) {
-            console.log(`🔄 Lavalink ping ok - ${new Date().toLocaleTimeString()}`);
-        } else {
-            console.log(`⚠️ Lavalink ping fallo (${res.status})`);
-        }
-    } catch (err) {
-        console.log(`❌ Error al hacer ping a Lavalink:`, err.message);
-    }
-}, 10 * 60 * 1000);
-
 
 client.login(token);
+
+const express = require('express');
+const app = express();
+
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.send('Bot activo 🚀');
+});
+
+app.listen(PORT, () => {
+    console.log(`Servidor de ping escuchando en el puerto ${PORT}`);
+});

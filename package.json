@@ -12,6 +12,7 @@
     "@discordjs/rest": "^2.5.1",
     "discord.js": "^14.21.0",
     "dotenv": "^17.2.1",
+    "express": "^5.1.0",
     "node-fetch": "^3.3.2",
     "poru": "^5.2.0",
     "shoukaku": "^4.1.1"
