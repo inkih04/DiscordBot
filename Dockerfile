@@ -29,5 +29,5 @@ CMD java -Djdk.tls.client.protocols=TLSv1.2 \
          -DLAVALINK_PASSWORD=$LAVALINK_PASSWORD \
          -jar Lavalink.jar & \
     echo "⏳ Esperando 5 segundos para que Lavalink arranque..." && \
-    sleep 5 && \
+    sleep 60 && \
     node index.js
