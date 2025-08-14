@@ -1,6 +1,29 @@
 require('dotenv').config()
 
+// 🐛 DEBUG: Verificar variables de entorno
+console.log('🔍 Variables de entorno cargadas:');
+console.log('DISCORD_TOKEN:', process.env.DISCORD_TOKEN ? `✅ Presente (${process.env.DISCORD_TOKEN.length} chars)` : '❌ Falta');
+console.log('CLIENT_ID:', process.env.CLIENT_ID ? '✅ Presente' : '❌ Falta');
+console.log('HOST:', process.env.HOST || 'undefined');
+
 const token = process.env.DISCORD_TOKEN;
+
+// 🚨 Verificar que el token existe y tiene formato correcto
+if (!token) {
+    console.error('❌ ERROR: DISCORD_TOKEN no está definido');
+    console.error('Variables disponibles:', Object.keys(process.env).filter(key => key.includes('DISCORD')));
+    process.exit(1);
+}
+
+// Verificar formato básico del token
+if (!token.includes('.') || token.length < 50) {
+    console.error('❌ ERROR: El token parece malformado');
+    console.error('Longitud del token:', token.length);
+    console.error('Primeros 10 chars:', token.substring(0, 10));
+    console.error('Últimos 10 chars:', token.substring(token.length - 10));
+    process.exit(1);
+}
+
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client, Collection, GatewayIntentBits } = require('discord.js');
@@ -21,7 +44,6 @@ client.commands = new Collection();
 client.queues = new Map();
 
 const nodes = [
-    // Últimos servidores reportados como funcionando
     {
         name: 'Amane-AjieDev-v3-SSL-1',
         url: 'lava-v3.ajieblogs.eu.org:443',
@@ -60,7 +82,6 @@ const nodes = [
     }
 ];
 
-
 // Agregar ANTES de crear Shoukaku
 process.on('unhandledRejection', (reason, promise) => {
     console.error('🚨 Unhandled Rejection at:', promise, 'reason:', reason);
@@ -74,7 +95,6 @@ const shoukaku = new Shoukaku(new Connectors.DiscordJS(client), nodes, {
     restTimeout: 10000
 });
 
-// ✅ LÍNEA CRÍTICA: Asignar shoukaku al client
 client.shoukaku = shoukaku;
 
 // IMPORTANTE: Manejar errores de Shoukaku
@@ -138,7 +158,11 @@ if (fs.existsSync(shoukakuEventsPath)) {
     }
 }
 
-client.login(token);
+// 🐛 DEBUG: Intentar login
+console.log('🚀 Intentando conectar a Discord...');
+client.login(token).catch(error => {
+    console.error('❌ Error al hacer login:', error);
+});
 
 const express = require('express');
 const app = express();
