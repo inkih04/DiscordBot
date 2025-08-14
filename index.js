@@ -1,8 +1,6 @@
 require('dotenv').config()
 
-
-
-/ Protección contra event loop blocking
+// Protección contra event loop blocking
 process.on('unhandledRejection', (reason, promise) => {
     console.error('🚨 Unhandled Rejection at:', promise, 'reason:', reason);
     // NO terminar el proceso, solo loggear
@@ -16,41 +14,9 @@ process.on('uncaughtException', (error) => {
     }, 1000);
 });
 
-// Monitor del event loop cada 30 segundos
+// Monitor del event loop cada 30 segundos (iniciar después del login)
 let lastEventLoop = process.hrtime();
-setInterval(() => {
-    const currentTime = process.hrtime();
-    const elapsed = (currentTime[0] - lastEventLoop[0]) * 1000 + (currentTime[1] - lastEventLoop[1]) / 1000000;
-    
-    if (elapsed > 35000) { // Si tardó más de 35s (debería ser ~30s)
-        console.warn(`⚠️ Event loop lag detectado: ${Math.round(elapsed)}ms`);
-    }
-    
-    lastEventLoop = currentTime;
-    console.log(`💓 Heartbeat: ${new Date().toISOString()} | Discord: ${client.isReady() ? '✅' : '❌'}`);
-}, 30000);
-
-// Timeout de seguridad para comandos
-const originalClientLogin = client.login;
-client.login = function(token) {
-    console.log('🚀 Iniciando login a Discord...');
-    const loginTimeout = setTimeout(() => {
-        console.error('⏱️ Login timeout después de 30s');
-    }, 30000);
-    
-    return originalClientLogin.call(this, token).then(result => {
-        clearTimeout(loginTimeout);
-        console.log('✅ Login completado exitosamente');
-        return result;
-    }).catch(error => {
-        clearTimeout(loginTimeout);
-        console.error('❌ Error en login:', error);
-        throw error;
-    });
-};
-
-
-
+let heartbeatInterval = null;
 
 // 🐛 DEBUG: Verificar variables de entorno
 console.log('🔍 Variables de entorno cargadas:');
@@ -95,8 +61,9 @@ const client = new Client({
 client.commands = new Collection();
 client.queues = new Map();
 
+// SOLO usar los nodos que SÍ funcionan según tus logs
 const nodes = [
-   {
+    {
         name: 'Amane-AjieDev-v4-SSL-1',
         url: 'lava-v4.ajieblogs.eu.org:443',
         auth: 'https://dsc.gg/ajidevserver',
@@ -121,11 +88,6 @@ const nodes = [
         secure: true
     }
 ];
-
-// Agregar ANTES de crear Shoukaku
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('🚨 Unhandled Rejection at:', promise, 'reason:', reason);
-});
 
 const shoukaku = new Shoukaku(new Connectors.DiscordJS(client), nodes, {
     moveOnDisconnect: false,       // No mover automáticamente para evitar loops
@@ -167,8 +129,27 @@ shoukaku.on('ready', (name) => {
     console.log(`✅ Node ${name} is ready!`);
 });
 
+// ✅ LÍNEA CRÍTICA: Asignar shoukaku al client
 client.shoukaku = shoukaku;
 
+// Timeout de seguridad para comandos
+const originalClientLogin = client.login;
+client.login = function(token) {
+    console.log('🚀 Iniciando login a Discord...');
+    const loginTimeout = setTimeout(() => {
+        console.error('⏱️ Login timeout después de 30s');
+    }, 30000);
+    
+    return originalClientLogin.call(this, token).then(result => {
+        clearTimeout(loginTimeout);
+        console.log('✅ Login completado exitosamente');
+        return result;
+    }).catch(error => {
+        clearTimeout(loginTimeout);
+        console.error('❌ Error en login:', error);
+        throw error;
+    });
+};
 
 const foldersPath = path.join(__dirname, 'commands');
 const commandFolders = fs.readdirSync(foldersPath);
@@ -216,7 +197,20 @@ if (fs.existsSync(shoukakuEventsPath)) {
 
 // 🐛 DEBUG: Intentar login
 console.log('🚀 Intentando conectar a Discord...');
-client.login(token).catch(error => {
+client.login(token).then(() => {
+    // Iniciar heartbeat monitor DESPUÉS del login exitoso
+    heartbeatInterval = setInterval(() => {
+        const currentTime = process.hrtime();
+        const elapsed = (currentTime[0] - lastEventLoop[0]) * 1000 + (currentTime[1] - lastEventLoop[1]) / 1000000;
+        
+        if (elapsed > 35000) { // Si tardó más de 35s (debería ser ~30s)
+            console.warn(`⚠️ Event loop lag detectado: ${Math.round(elapsed)}ms`);
+        }
+        
+        lastEventLoop = currentTime;
+        console.log(`💓 Heartbeat: ${new Date().toISOString()} | Discord: ${client.isReady() ? '✅' : '❌'}`);
+    }, 30000);
+}).catch(error => {
     console.error('❌ Error al hacer login:', error);
 });
 
@@ -225,6 +219,24 @@ const app = express();
 
 const PORT = process.env.PORT || 10000;
 
+// Health check endpoint básico
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        discord: client.isReady() ? 'connected' : 'disconnected',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.get('/', (req, res) => {
+    res.json({
+        bot: 'INkihBot',
+        status: 'running',
+        discord: client.isReady() ? 'connected' : 'disconnected'
+    });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Servidor de ping escuchando en el puerto ${PORT}`);
+    console.log(`🌐 Servidor de ping escuchando en el puerto ${PORT}`);
 });
