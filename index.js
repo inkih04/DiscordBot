@@ -1,5 +1,57 @@
 require('dotenv').config()
 
+
+
+/ Protección contra event loop blocking
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('🚨 Unhandled Rejection at:', promise, 'reason:', reason);
+    // NO terminar el proceso, solo loggear
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('💀 Uncaught Exception:', error);
+    // Intentar recovery graceful
+    setTimeout(() => {
+        console.log('🔄 Intentando recovery después de uncaught exception...');
+    }, 1000);
+});
+
+// Monitor del event loop cada 30 segundos
+let lastEventLoop = process.hrtime();
+setInterval(() => {
+    const currentTime = process.hrtime();
+    const elapsed = (currentTime[0] - lastEventLoop[0]) * 1000 + (currentTime[1] - lastEventLoop[1]) / 1000000;
+    
+    if (elapsed > 35000) { // Si tardó más de 35s (debería ser ~30s)
+        console.warn(`⚠️ Event loop lag detectado: ${Math.round(elapsed)}ms`);
+    }
+    
+    lastEventLoop = currentTime;
+    console.log(`💓 Heartbeat: ${new Date().toISOString()} | Discord: ${client.isReady() ? '✅' : '❌'}`);
+}, 30000);
+
+// Timeout de seguridad para comandos
+const originalClientLogin = client.login;
+client.login = function(token) {
+    console.log('🚀 Iniciando login a Discord...');
+    const loginTimeout = setTimeout(() => {
+        console.error('⏱️ Login timeout después de 30s');
+    }, 30000);
+    
+    return originalClientLogin.call(this, token).then(result => {
+        clearTimeout(loginTimeout);
+        console.log('✅ Login completado exitosamente');
+        return result;
+    }).catch(error => {
+        clearTimeout(loginTimeout);
+        console.error('❌ Error en login:', error);
+        throw error;
+    });
+};
+
+
+
+
 // 🐛 DEBUG: Verificar variables de entorno
 console.log('🔍 Variables de entorno cargadas:');
 console.log('DISCORD_TOKEN:', process.env.DISCORD_TOKEN ? `✅ Presente (${process.env.DISCORD_TOKEN.length} chars)` : '❌ Falta');
@@ -44,19 +96,7 @@ client.commands = new Collection();
 client.queues = new Map();
 
 const nodes = [
-    {
-        name: 'Amane-AjieDev-v3-SSL-1',
-        url: 'lava-v3.ajieblogs.eu.org:443',
-        auth: 'https://dsc.gg/ajidevserver',
-        secure: true
-    },
-    {
-        name: 'Amane-AjieDev-v3-SSL-2',
-        url: 'lavalinkv3-id.serenetia.com:443',
-        auth: 'https://dsc.gg/ajidevserver',
-        secure: true
-    },
-    {
+   {
         name: 'Amane-AjieDev-v4-SSL-1',
         url: 'lava-v4.ajieblogs.eu.org:443',
         auth: 'https://dsc.gg/ajidevserver',
@@ -88,22 +128,35 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const shoukaku = new Shoukaku(new Connectors.DiscordJS(client), nodes, {
-    moveOnDisconnect: false,
-    resumable: false,
+    moveOnDisconnect: false,       // No mover automáticamente para evitar loops
+    resumable: false,              // Desactivar resumable por ahora
     resumableTimeout: 30,
-    reconnectTries: 3,
+    reconnectTries: 2,             // REDUCIR intentos (era 3)
+    reconnectInterval: 15000,      // AUMENTAR intervalo entre intentos (15s)
     restTimeout: 10000
 });
 
-client.shoukaku = shoukaku;
-
-// IMPORTANTE: Manejar errores de Shoukaku
+// Manejo de errores más agresivo para prevenir loops
 shoukaku.on('error', (name, error) => {
-    console.error(`❌ Shoukaku error on ${name}:`, error);
+    console.error(`❌ Shoukaku error on ${name}:`, error.message);
+    
+    // Si un nodo da muchos errores 403, deshabilitarlo temporalmente
+    const node = shoukaku.nodes.get(name);
+    if (error.message.includes('403') && node) {
+        console.log(`🚫 Deshabilitando temporalmente el nodo ${name} por errores 403`);
+        // No intentar reconectar nodos con 403
+        return;
+    }
 });
 
 shoukaku.on('disconnect', (name, moved, reconnecting) => {
     console.log(`🔌 Node ${name} disconnected. Moved: ${moved}, Reconnecting: ${reconnecting}`);
+    
+    // Limitar reconexiones problemáticas
+    const node = shoukaku.nodes.get(name);
+    if (node && node.reconnectAttempts > 3) {
+        console.log(`🛑 Nodo ${name} superó el límite de reconexiones, deteniéndolo`);
+    }
 });
 
 shoukaku.on('reconnecting', (name) => {
@@ -113,6 +166,9 @@ shoukaku.on('reconnecting', (name) => {
 shoukaku.on('ready', (name) => {
     console.log(`✅ Node ${name} is ready!`);
 });
+
+client.shoukaku = shoukaku;
+
 
 const foldersPath = path.join(__dirname, 'commands');
 const commandFolders = fs.readdirSync(foldersPath);
